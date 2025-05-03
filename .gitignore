@@ -1,0 +1,28 @@
+# Entornos virtuales
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Archivos compilados y paquetes de Python
+*.pyc
+__pycache__/
+*.so
+*.pyd
+
+# Carpetas y archivos de PyInstaller
+dist/
+build/
+*.spec
+
+# Archivos de configuración de IDEs/Editores (Ejemplos)
+.vscode/
+.idea/
+*.swp
+*~
+
+# Archivos de Sistema Operativo
+.DS_Store
+Thumbs.db
