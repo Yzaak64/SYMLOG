@@ -1,7 +1,5 @@
 
-# Aplicación de Interfaz Gráfica SYMLOG Tkinter
-
-<a href="https://www.buymeacoffee.com/Yzaak64" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-green.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
+# Aplicación de Interfaz Gráfica SYMLOG Tkinter <a href="https://www.buymeacoffee.com/Yzaak64" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-green.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
 
 Esta es una aplicación de escritorio desarrollada con Python y Tkinter para facilitar el cálculo y la visualización de resultados según la metodología SYMLOG.
 
