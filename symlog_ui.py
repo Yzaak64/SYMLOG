@@ -34,14 +34,43 @@ class SymlogApp:
         self.manual_item_widgets = {}
         self.manual_entry_order = []
 
-        # --- Estilo y Layout Principal ---
+        # --- Estilo y Layout Principal con SCROLLBARS ---
         style = ttk.Style()
         style.theme_use('clam')
+
+        # Contenedor exterior que gestionará el canvas y los scrollbars con grid
+        main_container = ttk.Frame(master)
+        main_container.pack(fill=tk.BOTH, expand=True)
+        main_container.grid_rowconfigure(0, weight=1)
+        main_container.grid_columnconfigure(0, weight=1)
+
+        # Canvas principal para hacer la UI desplazable
+        self.canvas = tk.Canvas(main_container, bd=0, highlightthickness=0)
+        self.canvas.grid(row=0, column=0, sticky='nsew')
+
+        # Scrollbars para el canvas
+        v_scrollbar = ttk.Scrollbar(main_container, orient="vertical", command=self.canvas.yview)
+        v_scrollbar.grid(row=0, column=1, sticky='ns')
+        h_scrollbar = ttk.Scrollbar(main_container, orient="horizontal", command=self.canvas.xview)
+        h_scrollbar.grid(row=1, column=0, sticky='ew')
         
-        main_frame = ttk.Frame(master, padding="10")
-        main_frame.pack(fill=tk.BOTH, expand=True)
+        self.canvas.configure(yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
+
+        # Frame interior que contendrá todos los widgets
+        self.scrollable_frame = ttk.Frame(self.canvas, padding="10")
+        self.canvas_window = self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
+
+        # Binds para que el scrollregion se actualice
+        self.scrollable_frame.bind("<Configure>", self._on_scrollable_frame_configure)
+        self.canvas.bind("<Configure>", self._on_canvas_configure)
         
-        top_frame = ttk.Frame(main_frame)
+        # Un único binding para la rueda del ratón que gestionará qué área desplazar
+        master.bind_all("<MouseWheel>", self._on_mousewheel, add='+')
+        master.bind_all("<Button-4>", self._on_mousewheel, add='+')
+        master.bind_all("<Button-5>", self._on_mousewheel, add='+')
+
+        # --- Contenido de la Aplicación (ahora dentro de self.scrollable_frame) ---
+        top_frame = ttk.Frame(self.scrollable_frame)
         top_frame.pack(fill=tk.X, pady=5, side=tk.TOP)
         
         ttk.Label(top_frame, text="Acción:").pack(side=tk.LEFT, padx=5)
@@ -57,7 +86,7 @@ class SymlogApp:
         self.scale_combo.pack(side=tk.LEFT, padx=5)
         self.scale_combo.bind('<<ComboboxSelected>>', self._on_scale_change)
         
-        self.action_panel_container = ttk.Frame(main_frame)
+        self.action_panel_container = ttk.Frame(self.scrollable_frame)
         self.action_panel_container.pack(fill=tk.BOTH, expand=True, pady=5, side=tk.TOP, after=top_frame)
         
         self.action_panels={}
@@ -66,12 +95,12 @@ class SymlogApp:
         self.action_panels['3. Procesar Archivo Excel Subido'] = self._create_excel_panel(self.action_panel_container)
         self.action_panels['4. Generar Gráfico desde JSON'] = self._create_json_plot_panel(self.action_panel_container)
         
-        output_frame_container = ttk.LabelFrame(main_frame, text="Salida y Mensajes")
+        output_frame_container = ttk.LabelFrame(self.scrollable_frame, text="Salida y Mensajes")
         output_frame_container.pack(fill=tk.X, pady=5, side=tk.BOTTOM, expand=False)
         self.output_text = scrolledtext.ScrolledText(output_frame_container, wrap=tk.WORD, height=10, state='disabled')
         self.output_text.pack(fill=tk.BOTH, expand=True)
 
-        bottom_actions_frame = ttk.Frame(main_frame)
+        bottom_actions_frame = ttk.Frame(self.scrollable_frame)
         bottom_actions_frame.pack(fill=tk.X, side=tk.BOTTOM, pady=(5, 0))
 
         self.manual_button = ttk.Button(bottom_actions_frame, text="📖 Ver Manual de Usuario", command=self._open_manual)
@@ -95,6 +124,54 @@ class SymlogApp:
         self._update_action_panels()
         self._update_widget_states()
         self._log("Interfaz SYMLOG iniciada.")
+
+    # --- Funciones para gestionar el Scroll ---
+    def _on_scrollable_frame_configure(self, event=None):
+        """Actualiza la región de scroll del canvas cuando el frame interior cambia de tamaño."""
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+
+    def _on_canvas_configure(self, event):
+        """Ajusta el ancho del frame interior al ancho del canvas para evitar espacio muerto."""
+        self.canvas.itemconfig(self.canvas_window, width=event.width)
+
+    def _on_mousewheel(self, event):
+        """Gestiona la rueda del ratón para desplazar el canvas principal o el de entrada manual."""
+        target_canvas = None
+        widget_under_cursor = self.master.winfo_containing(event.x_root, event.y_root)
+        
+        # Prioridad 1: Canvas de entrada manual (si existe)
+        if hasattr(self, 'mic'):
+            curr = widget_under_cursor
+            while curr is not None:
+                if curr == self.mic:
+                    target_canvas = self.mic
+                    break
+                curr = curr.master
+        
+        # Prioridad 2: Canvas principal
+        if target_canvas is None and hasattr(self, 'canvas'):
+            curr = widget_under_cursor
+            while curr is not None:
+                if curr == self.canvas:
+                    target_canvas = self.canvas
+                    break
+                # Si encontramos el ScrolledText, no hacemos nada, ya que se gestiona solo
+                if curr == self.output_text:
+                    return 
+                curr = curr.master
+
+        if not target_canvas:
+            return
+
+        # Lógica de scroll
+        if sys.platform == "win32" or sys.platform == "darwin":
+            delta = -1 * int(event.delta / (120 if sys.platform == "win32" else 1))
+        else: # Linux
+            if event.num == 4: delta = -1
+            elif event.num == 5: delta = 1
+            else: delta = 0
+        
+        target_canvas.yview_scroll(delta, "units")
 
     # --- Crear Paneles ---
     def _create_template_panel(self, parent):
@@ -120,9 +197,7 @@ class SymlogApp:
         self.mic.pack(side="left",fill="both",expand=True)
         self.micw=self.mic.create_window((0,0),window=self.mif,anchor="nw",tags="self.mif")
         self.mif.bind("<Configure>", self._on_manual_items_frame_configure)
-        self.mic.bind_all("<MouseWheel>", self._on_mousewheel, add='+')
-        self.mic.bind_all("<Button-4>", self._on_mousewheel, add='+')
-        self.mic.bind_all("<Button-5>", self._on_mousewheel, add='+')
+        # Se eliminan los binds de la rueda del ratón de aquí, ahora se gestionan globalmente
         self.manual_add_button=ttk.Button(frame,text="Calcular y Añadir Participante",command=self._add_manual,state='disabled')
         self.manual_add_button.pack(pady=10)
         return frame
@@ -261,25 +336,6 @@ class SymlogApp:
         bbox = self.mic.bbox("all")
         if bbox: self.mic.configure(scrollregion=bbox)
         self.mic.itemconfig(self.micw, width=event.width)
-
-    def _on_mousewheel(self, event):
-        widget = self.master.winfo_containing(event.x_root, event.y_root)
-        is_over = False
-        curr = widget
-        while curr is not None:
-            if curr == self.mic:
-                is_over = True
-                break
-            curr = curr.master
-        if not is_over: return
-        
-        if sys.platform == "win32" or sys.platform == "darwin":
-            delta = -1 * int(event.delta / (120 if sys.platform == "win32" else 1))
-        else: # Linux
-            if event.num == 4: delta = -1
-            elif event.num == 5: delta = 1
-            else: delta = 0
-        self.mic.yview_scroll(delta, "units")
 
     # --- Lógica de Acciones ---
     def _open_manual(self):
